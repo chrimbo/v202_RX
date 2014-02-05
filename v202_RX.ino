@@ -154,21 +154,18 @@ void loop()
     }
     analogWrite(3, packet[0]);
   }
-  if(timeout >= 2000)
+  if(timeout >= 20)
   {
     // 20ms without new packet
     setnextChannel();
-    Serial.println("T");
+    Serial.print("T");
     timeout = 0;
     if(++timeoutcounter > 3)
     {
       timeoutcounter = 0;
       
-      while(!Mirf.dataReady())
-      {
-        Mirf.getData(packet);
-        Mirf.flushRx();
-      }
+      index-= 8;
+      index&=0x0f;
       setnextChannel();
       time = millis();
     }
