@@ -4,6 +4,7 @@
 #include <SPI.h>
 #include <Mirf.h>
 #include <nRF24L01.h>
+#include "printf.h"
 #include <MirfHardwareSpiDriver.h>
 
 uint8_t data[16];
@@ -61,6 +62,42 @@ void printHoppingTable()
   }
 }
 
+uint8_t txid[] = {0,0,0};
+void setTransmitter(uint8_t *id)
+{
+  txid[0] = id[0];
+  txid[1] = id[1];
+  txid[2] = id[2];
+}
+
+boolean ismyTransmitter(uint8_t *id)
+{
+  if(txid[0] != id[0])
+    return false;
+  if(txid[1] != id[1])
+    return false;
+  if(txid[2] != id[2])
+    return false;
+  return true;
+}
+
+uint8_t channels[] = {0,0,0,0,0};
+boolean getChannels(uint8_t *packet)
+{
+  // Check for checksum
+  if(!calculateChecksum(packet))
+    return false; // Wrong checksum
+  if(!ismyTransmitter(packet + 7))
+    return false; // Wrong transmitter
+  channels[0] = packet[0];
+  channels[1] = packet[1]; 
+  channels[2] = packet[2];
+  channels[3] = packet[3];
+  channels[4] = packet[4];
+  return true;
+}
+
+
 
 
 uint8_t time = 0;
@@ -68,6 +105,7 @@ uint8_t timeout = 0;
 
 void setup(){
   Serial.begin(115200);
+  printf_begin();
   /*
    * Setup pins / SPI.
    */
@@ -120,6 +158,7 @@ void setup(){
         printHoppingTable();
         setnextChannel();
         bind = true;
+        setTransmitter(bindpacket+7);
       }
     }
   }
@@ -133,6 +172,15 @@ void setup(){
 
 uint8_t packet[16];
 uint8_t timeoutcounter = 0;
+
+void printdata(byte *packet)
+{
+  printf("\r\nTHR:0x%02x  YAW:0x%02x  PIT:0x%02x  ROL:0x%02x FLGS:0x%02x \t", packet[0], packet[1], packet[2], packet[3], packet[14]);
+}
+void printchannels()
+{
+  printf("\r\nTHR:0x%02x  YAW:0x%02x  PIT:0x%02x  ROL:0x%02x FLGS:0x%02x \t", channels[0], channels[1], channels[2], channels[3], channels[14]);
+}
 void loop()
 {
   
@@ -140,31 +188,35 @@ void loop()
   time = millis();  
   if(Mirf.dataReady())
   {
-    Serial.println("R");
+    Serial.print("R");
     Mirf.getData(packet);
     setnextChannel();
-    for(int i = 0 ; i< 16; i++)
-      Serial.print(packet[i], HEX);
+    if(!getChannels(packet))
+      Serial.print("FAIL\r\n");
+    printchannels();
+  //    printdata(packet);
+  //  if(!calculateChecksum(packet))
+  //  {
+  //    Serial.println("Checksum error");
+  //    return;
+  //  }
+    analogWrite(3, packet[0]);
     timeout = 0;
     timeoutcounter = 0;
-    if(!calculateChecksum(packet))
-    {
-      Serial.println("Checksum error");
-      return;
-    }
-    analogWrite(3, packet[0]);
   }
-  if(timeout >= 20)
+  if(timeout > 25)
   {
-    // 20ms without new packet
+    // 24ms without new packet
+    setnextChannel();
     setnextChannel();
     Serial.print("T");
     timeout = 0;
     if(++timeoutcounter > 3)
     {
+      Serial.print("B");
       timeoutcounter = 0;
       
-      index-= 8;
+      index-= 9;
       index&=0x0f;
       setnextChannel();
       time = millis();
